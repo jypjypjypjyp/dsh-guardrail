@@ -1,0 +1,6 @@
+# dsh-guardrail bundle patch: inserts the guardrail plugin row over the
+# profile root. Per-row config (enabled/rulesFile/builtins/audit) lands in the
+# user's profile cordis.patch.yml under id: guardrail (T2 schema).
+- insert:
+    - id: guardrail
+      name: dsh-guardrail
