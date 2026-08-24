@@ -14,7 +14,12 @@ export interface AuditEntry {
 }
 
 export function summarizeArgs(args: unknown, max = 120): string {
-  const s = JSON.stringify(args) ?? ''
+  let s: string
+  try {
+    s = JSON.stringify(args) ?? ''
+  } catch {
+    s = String(args)
+  }
   return s.length > max ? s.slice(0, max) + '…' : s
 }
 
