@@ -1,3 +1,5 @@
+import { appendFileSync } from 'node:fs'
+
 export type AuditAction = 'deny' | 'warn' | 'error'
 
 export interface AuditEntry {
@@ -18,14 +20,28 @@ export function summarizeArgs(args: unknown, max = 120): string {
 
 export class Audit {
   private entries: AuditEntry[] = []
-  constructor(private readonly maxEntries: number) {}
+
+  constructor(
+    private readonly maxEntries: number,
+    private readonly logFile?: string,
+  ) {}
+
   push(entry: AuditEntry): void {
     this.entries.push(entry)
     if (this.entries.length > this.maxEntries) {
       this.entries.splice(0, this.entries.length - this.maxEntries)
     }
+    if (this.logFile) {
+      try {
+        appendFileSync(this.logFile, JSON.stringify(entry) + '\n')
+      } catch {
+        // 日志写入失败不阻断拦截链路
+      }
+    }
   }
-  list(): AuditEntry[] {
-    return [...this.entries]
+
+  list(filter?: { action?: AuditAction }): AuditEntry[] {
+    if (!filter?.action) return [...this.entries]
+    return this.entries.filter((e) => e.action === filter.action)
   }
 }
