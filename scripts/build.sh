@@ -44,7 +44,7 @@ link_pkg() {
   " "$link" "$target"
 }
 mkdir -p node_modules/@deepseek-ai
-for pkg in cordis schemastery dsh-tools dsh-llm dsh-host-webserver dsh-session dsh-scope dsh-agent dsh-client-runtime; do
+for pkg in cordis schemastery dsh-tools dsh-llm dsh-host-webserver dsh-session dsh-scope dsh-agent dsh-client-runtime dsh-settings; do
   if [ -d "$CHECKOUT/node_modules/@deepseek-ai/$pkg" ]; then
     link_pkg "@deepseek-ai/$pkg" "$CHECKOUT/node_modules/@deepseek-ai/$pkg"
   fi

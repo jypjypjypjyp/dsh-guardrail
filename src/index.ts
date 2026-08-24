@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 // 拉取 @deepseek-ai/dsh-host-webserver 的 cordis 模块增强（ctx.webServer 类型）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import { Audit } from './audit.js'
 import { BUILTIN_RULES } from './builtin-rules.js'
@@ -153,12 +154,23 @@ export function createApiHandler(deps: ApiDeps) {
 }
 
 export function apply(ctx: Context, config?: Config): void {
-  const resolve = (): Config => ({
+  const defaults: Config = {
     enabled: true,
     rulesFile: join(homedir(), '.dsh', 'guardrail-rules.json'),
     builtins: { enabled: true, overrides: [] },
     audit: { maxEntries: 200 },
-    ...config,
+  }
+  const entry: Config = { ...defaults, ...config }
+
+  // 起始配置 = 组合传入 + 默认。设置卡片/文档若存在则经 setSource 回流覆盖。
+  let getConfig: () => Config = () => entry
+  const resolve = (): Config => getConfig()
+
+  // 注册 settings 命名空间：让"设置"页出现 guardrail 配置卡片（schema 驱动），
+  // 保存即写回设置文档，且改动实时影响 生效规则/审计 等。
+  installSettingsSection(ctx, settingsNamespace('guardrail'), Config, entry, {
+    setSource: (get) => { getConfig = get },
+    onChange: () => {},
   })
 
   const store = new RuleStore(resolve().rulesFile, ctx.logger)
