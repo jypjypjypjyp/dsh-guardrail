@@ -7,8 +7,9 @@
  * 经 webServer 暴露 /guardrail/api/* 供管理面板读写。
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 // 拉取 @deepseek-ai/dsh-host-webserver 的 cordis 模块增强（ctx.webServer 类型）。
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -77,9 +78,34 @@ function effectiveRules(config: Config, store: RuleStore): CompiledRule[] {
   return compileRules([...builtins, ...store.list()]).compiled
 }
 
+/** 用户可在 UI 改写的插件配置：持久化到 `~/.dsh/guardrail-config.json`。 */
+const CONFIG_FILE = join(homedir(), '.dsh', 'guardrail-config.json')
+
+function loadConfig(): Partial<Config> {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(CONFIG_FILE, 'utf8'))
+    return parsed && typeof parsed === 'object' ? (parsed as Partial<Config>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveConfig(cfg: Config): void {
+  try {
+    mkdirSync(dirname(CONFIG_FILE), { recursive: true })
+    writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2))
+  } catch {
+    // 配置写盘失败不阻断拦截链路
+  }
+}
+
 export interface ApiDeps extends GuardrailDeps {
   store: RuleStore
   builtins: () => Rule[]
+  config: {
+    get: () => Config
+    put: (cfg: Partial<Config>) => void
+  }
 }
 
 const json = (res: ServerResponse, status: number, data: unknown): void => {
@@ -110,6 +136,16 @@ export function createApiHandler(deps: ApiDeps) {
       if (req.method === 'GET' && rest === '/audit') {
         const action = url.searchParams.get('action')
         json(res, 200, { entries: deps.audit.list(action ? { action: action as 'deny' | 'warn' | 'error' } : undefined) })
+        return
+      }
+      if (req.method === 'GET' && rest === '/config') {
+        json(res, 200, { config: deps.config.get() })
+        return
+      }
+      if (req.method === 'PUT' && rest === '/config') {
+        const body = JSON.parse(await readBody(req)) as Partial<Config>
+        deps.config.put(body)
+        json(res, 200, { ok: true, config: deps.config.get() })
         return
       }
       if (req.method === 'POST' && rest === '/test') {
@@ -162,14 +198,13 @@ export function apply(ctx: Context, config?: Config): void {
   }
   const entry: Config = { ...defaults, ...config }
 
-  // 起始配置 = 组合传入 + 默认。设置卡片/文档若存在则经 setSource 回流覆盖。
-  let getConfig: () => Config = () => entry
-  const resolve = (): Config => getConfig()
+  // 有效配置 = 组合传入 + 默认 + 用户经 UI 写入的配置文件（文件覆盖）。
+  let current: Config = { ...entry, ...loadConfig() }
+  const resolve = (): Config => current
 
-  // 注册 settings 命名空间：让"设置"页出现 guardrail 配置卡片（schema 驱动），
-  // 保存即写回设置文档，且改动实时影响 生效规则/审计 等。
+  // 注册 settings 命名空间（让"设置"页可寻址该配置）；setSource 回流合并进 current。
   installSettingsSection(ctx, settingsNamespace('guardrail'), Config, entry, {
-    setSource: (get) => { getConfig = get },
+    setSource: (get) => { current = { ...current, ...get() } },
     onChange: () => {},
   })
 
@@ -189,6 +224,18 @@ export function apply(ctx: Context, config?: Config): void {
     ...deps,
     store,
     builtins: () => (resolve().builtins.enabled ? BUILTIN_RULES : []),
+    config: {
+      get: () => ({ ...current }),
+      put: (cfg) => {
+        current = {
+          ...current,
+          ...cfg,
+          builtins: { ...current.builtins, ...(cfg.builtins ?? {}) },
+          audit: { ...current.audit, ...(cfg.audit ?? {}) },
+        }
+        saveConfig(current)
+      },
+    },
   }
 
   ctx.effect(() => ctx.on('tools/pre-execute', createPreExecuteHandler(deps, tracker)), 'guardrail: pre-execute')

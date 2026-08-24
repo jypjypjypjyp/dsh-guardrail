@@ -40,6 +40,20 @@ interface AuditEntry {
   reason: string
 }
 
+interface GuardrailConfig {
+  enabled: boolean
+  rulesFile: string
+  builtins: { enabled: boolean; overrides: Rule[] }
+  audit: { maxEntries: number; logFile?: string }
+}
+
+const DEFAULT_CFG: GuardrailConfig = {
+  enabled: true,
+  rulesFile: '',
+  builtins: { enabled: true, overrides: [] },
+  audit: { maxEntries: 200 },
+}
+
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(API + path)
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -63,6 +77,7 @@ function GuardrailPanel(): React.ReactElement {
   const [tool, setTool] = React.useState('')
   const [args, setArgs] = React.useState('')
   const [result, setResult] = React.useState('')
+  const [cfg, setCfg] = React.useState<GuardrailConfig>(DEFAULT_CFG)
 
   const refresh = React.useCallback(async () => {
     try {
@@ -70,6 +85,8 @@ function GuardrailPanel(): React.ReactElement {
       setRules(r.rules ?? [])
       const a = await apiGet<{ entries: AuditEntry[] }>('/audit')
       setAudit((a.entries ?? []).slice(-30))
+      const c = await apiGet<{ config: GuardrailConfig }>('/config')
+      if (c.config) setCfg(c.config)
     } catch (e) {
       setError(String(e))
     }
@@ -80,6 +97,21 @@ function GuardrailPanel(): React.ReactElement {
     const t = window.setInterval(() => void refresh(), 5000)
     return () => window.clearInterval(t)
   }, [refresh])
+
+  const saveConfig = async (next: GuardrailConfig): Promise<void> => {
+    try {
+      const r = await apiSend<{ ok: boolean; config: GuardrailConfig }>('PUT', '/config', next)
+      if (r.config) setCfg(r.config)
+      setError('')
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+  const overrideBuiltin = async (id: string, patch: Partial<Rule>): Promise<void> => {
+    const others = (cfg.builtins.overrides ?? []).filter((o) => o.id !== id)
+    await saveConfig({ ...cfg, builtins: { ...cfg.builtins, overrides: [...others, { id, ...patch }] } })
+    await refresh()
+  }
 
   const toggleRule = async (id: string, enabled: boolean): Promise<void> => {
     try {
@@ -124,11 +156,18 @@ function GuardrailPanel(): React.ReactElement {
         `${(r.tools?.length ? r.tools.join(',') : '*')}  ${r.pattern.slice(0, 32)}`),
       React.createElement('button', {
         style: { marginLeft: 'auto' },
-        onClick: () => void toggleRule(r.id, r.enabled),
+        onClick: () => void (r.builtin ? overrideBuiltin(r.id, { enabled: !r.enabled }) : toggleRule(r.id, r.enabled)),
       }, r.enabled ? '停用' : '启用'),
-      !r.builtin
-        ? React.createElement('button', { onClick: () => void removeRule(r.id) }, '删除')
-        : null,
+      r.builtin
+        ? React.createElement('select', {
+            value: r.action,
+            onChange: (e) => void overrideBuiltin(r.id, { action: e.target.value as 'deny' | 'warn' }),
+            style: { fontSize: 11 },
+          },
+          React.createElement('option', { value: 'deny' }, 'deny'),
+          React.createElement('option', { value: 'warn' }, 'warn'),
+        )
+        : React.createElement('button', { onClick: () => void removeRule(r.id) }, '删除'),
     ),
   )
 
@@ -142,7 +181,25 @@ function GuardrailPanel(): React.ReactElement {
   return React.createElement('div', { style: { fontFamily: 'ui-monospace,monospace', fontSize: 12, padding: 12 } },
     React.createElement('div', { style: { fontWeight: 700, marginBottom: 8 } }, '🛡️ guardrail 工具调用守卫'),
     error ? React.createElement('div', { style: { color: '#e0a0a0', marginBottom: 6 } }, error) : null,
-    React.createElement('div', { style: { fontWeight: 600, margin: '6px 0 4px' } }, '规则'),
+    React.createElement('div', { style: { margin: '6px 0', padding: 8, border: '1px solid #333', borderRadius: 6 } },
+      React.createElement('div', { style: { fontWeight: 600, marginBottom: 4 } }, '配置'),
+      React.createElement('label', null,
+        React.createElement('input', { type: 'checkbox', checked: cfg.enabled, onChange: (e) => void saveConfig({ ...cfg, enabled: e.target.checked }) }),
+        '  启用守卫'),
+      React.createElement('label', { style: { display: 'block' } },
+        '规则文件 ',
+        React.createElement('input', { value: cfg.rulesFile, readOnly: true, style: { width: '70%' } })),
+      React.createElement('label', { style: { display: 'block' } },
+        React.createElement('input', { type: 'checkbox', checked: cfg.builtins.enabled, onChange: (e) => void saveConfig({ ...cfg, builtins: { ...cfg.builtins, enabled: e.target.checked } }) }),
+        '  启用内置规则'),
+      React.createElement('label', { style: { display: 'block' } },
+        ' 审计上限 ',
+        React.createElement('input', { type: 'number', value: cfg.audit.maxEntries, onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, maxEntries: Number(e.target.value) || 0 } }), style: { width: 80 } })),
+      React.createElement('label', { style: { display: 'block' } },
+        ' 日志文件 ',
+        React.createElement('input', { value: cfg.audit.logFile ?? '', onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, logFile: e.target.value } }), style: { width: '70%' } })),
+    ),
+    React.createElement('div', { style: { fontWeight: 600, margin: '6px 0 4px' } }, '规则（内置规则可直接切换动作/启停，作为覆盖保存）'),
     React.createElement('div', null, rows),
     React.createElement('div', { style: { margin: '10px 0', padding: 8, border: '1px solid #333', borderRadius: 6 } },
       React.createElement('div', { style: { fontWeight: 600, marginBottom: 4 } }, '测试匹配'),

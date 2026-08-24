@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Audit } from './audit.ts'
 import { BUILTIN_RULES } from './builtin-rules.ts'
 import { compileRules } from './rules.ts'
@@ -28,6 +28,10 @@ const makeDeps = (): ApiDeps => {
     rules: () => compileRules(BUILTIN_RULES).compiled,
     // 展示用：GET /rules 期望仅用户规则存储（此处为空）
     builtins: () => [],
+    config: {
+      get: () => ({ enabled: true, rulesFile: file, builtins: { enabled: true, overrides: [] }, audit: { maxEntries: 20 } }),
+      put: () => {},
+    },
   }
 }
 
@@ -97,5 +101,19 @@ describe('createApiHandler', () => {
     const deps = makeDeps()
     const { status } = await call(deps, 'POST', '/guardrail/api/rules', undefined)
     expect(status).toBe(400)
+  })
+  it('GET /config 返回当前配置', async () => {
+    const deps = makeDeps()
+    const { status, json } = await call(deps, 'GET', '/guardrail/api/config')
+    expect(status).toBe(200)
+    expect((json as { config: { enabled: boolean } }).config.enabled).toBe(true)
+  })
+  it('PUT /config 更新配置（浅层+嵌套合并）', async () => {
+    const deps = makeDeps()
+    const pid = vi.fn()
+    ;(deps.config as { put: (c: unknown) => void }).put = pid
+    const { status } = await call(deps, 'PUT', '/guardrail/api/config', { enabled: false, audit: { maxEntries: 9 } })
+    expect(status).toBe(200)
+    expect(pid).toHaveBeenCalledWith({ enabled: false, audit: { maxEntries: 9 } })
   })
 })
