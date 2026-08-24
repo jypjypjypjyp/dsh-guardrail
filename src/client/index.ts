@@ -54,6 +54,27 @@ const DEFAULT_CFG: GuardrailConfig = {
   audit: { maxEntries: 200 },
 }
 
+// 复用 DSH 主题 CSS 变量，与整站视觉保持一致（颜色/边框/圆角/字体均取自主题 token）。
+const S = {
+  root: { fontFamily: 'var(--ds-font-family-code)', fontSize: 12, color: 'var(--dsw-alias-label-primary)', padding: 12 },
+  heading: { fontWeight: 700, marginBottom: 8 },
+  sub: { fontWeight: 600, margin: '6px 0 4px', color: 'var(--dsw-alias-label-primary)' },
+  card: { margin: '6px 0', padding: 8, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-module-platform)' },
+  row: { display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', borderBottom: '1px solid var(--dsw-alias-border-l2)' },
+  muted: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11 },
+  error: { color: 'var(--dsw-alias-state-error-primary)', marginBottom: 6 },
+  label: { display: 'block', margin: '2px 0', color: 'var(--dsw-alias-label-secondary)' },
+  input: { background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 6, padding: '1px 6px', fontSize: 12 },
+  result: { whiteSpace: 'pre-wrap', marginTop: 4, color: 'var(--dsw-alias-label-primary)' },
+  audit: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--dsw-alias-label-tertiary)', fontSize: 11 },
+} satisfies Record<string, React.CSSProperties>
+
+const badge = (kind: 'deny' | 'warn'): React.CSSProperties => ({
+  display: 'inline-block', padding: '0 6px', borderRadius: 8, fontSize: 11,
+  background: kind === 'deny' ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-state-warn-label)',
+  marginLeft: 6, color: 'var(--dsw-alias-label-primary)',
+})
+
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(API + path)
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -140,19 +161,11 @@ function GuardrailPanel(): React.ReactElement {
     }
   }
 
-  const badge = (color: string): React.CSSProperties => ({
-    display: 'inline-block', padding: '0 6px', borderRadius: 8, fontSize: 11,
-    background: color, marginLeft: 6,
-  })
-
   const rows: React.ReactElement[] = rules.map((r) =>
-    React.createElement('div', {
-      key: r.id,
-      style: { display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', borderBottom: '1px solid #333' },
-    },
+    React.createElement('div', { style: S.row, key: r.id },
       React.createElement('span', { style: { fontWeight: 600 } }, `${r.builtin ? '📦' : '📝'} ${r.id}`),
-      React.createElement('span', { style: badge(r.action === 'deny' ? '#7a1f1f' : '#7a5f1f') }, r.action),
-      React.createElement('span', { style: { color: '#999', fontSize: 11 } },
+      React.createElement('span', { style: badge(r.action) }, r.action),
+      React.createElement('span', { style: S.muted },
         `${(r.tools?.length ? r.tools.join(',') : '*')}  ${r.pattern.slice(0, 32)}`),
       React.createElement('button', {
         style: { marginLeft: 'auto' },
@@ -162,7 +175,7 @@ function GuardrailPanel(): React.ReactElement {
         ? React.createElement('select', {
             value: r.action,
             onChange: (e) => void overrideBuiltin(r.id, { action: e.target.value as 'deny' | 'warn' }),
-            style: { fontSize: 11 },
+            style: { fontSize: 11, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', border: '1px solid var(--dsw-alias-border-l2)' },
           },
           React.createElement('option', { value: 'deny' }, 'deny'),
           React.createElement('option', { value: 'warn' }, 'warn'),
@@ -172,53 +185,51 @@ function GuardrailPanel(): React.ReactElement {
   )
 
   const audits: React.ReactElement[] = audit.map((e, i) =>
-    React.createElement('div', {
-      key: `${e.ts}-${i}`,
-      style: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#999', fontSize: 11 },
-    }, `[${new Date(e.ts).toLocaleTimeString()}] ${e.action} ${e.tool} → ${e.ruleId} ${e.reason}`),
+    React.createElement('div', { key: `${e.ts}-${i}`, style: S.audit },
+      `[${new Date(e.ts).toLocaleTimeString()}] ${e.action} ${e.tool} → ${e.ruleId} ${e.reason}`),
   )
 
-  return React.createElement('div', { style: { fontFamily: 'ui-monospace,monospace', fontSize: 12, padding: 12 } },
-    React.createElement('div', { style: { fontWeight: 700, marginBottom: 8 } }, '🛡️ guardrail 工具调用守卫'),
-    error ? React.createElement('div', { style: { color: '#e0a0a0', marginBottom: 6 } }, error) : null,
-    React.createElement('div', { style: { margin: '6px 0', padding: 8, border: '1px solid #333', borderRadius: 6 } },
-      React.createElement('div', { style: { fontWeight: 600, marginBottom: 4 } }, '配置'),
+  return React.createElement('div', { style: S.root },
+    React.createElement('div', { style: S.heading }, '🛡️ guardrail 工具调用守卫'),
+    error ? React.createElement('div', { style: S.error }, error) : null,
+    React.createElement('div', { style: S.card },
+      React.createElement('div', { style: S.sub }, '配置'),
       React.createElement('label', null,
         React.createElement('input', { type: 'checkbox', checked: cfg.enabled, onChange: (e) => void saveConfig({ ...cfg, enabled: e.target.checked }) }),
         '  启用守卫'),
-      React.createElement('label', { style: { display: 'block' } },
+      React.createElement('label', { style: S.label },
         '规则文件 ',
-        React.createElement('input', { value: cfg.rulesFile, readOnly: true, style: { width: '70%' } })),
-      React.createElement('label', { style: { display: 'block' } },
+        React.createElement('input', { value: cfg.rulesFile, readOnly: true, style: { ...S.input, width: '70%' } })),
+      React.createElement('label', { style: S.label },
         React.createElement('input', { type: 'checkbox', checked: cfg.builtins.enabled, onChange: (e) => void saveConfig({ ...cfg, builtins: { ...cfg.builtins, enabled: e.target.checked } }) }),
         '  启用内置规则'),
-      React.createElement('label', { style: { display: 'block' } },
+      React.createElement('label', { style: S.label },
         ' 审计上限 ',
-        React.createElement('input', { type: 'number', value: cfg.audit.maxEntries, onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, maxEntries: Number(e.target.value) || 0 } }), style: { width: 80 } })),
-      React.createElement('label', { style: { display: 'block' } },
+        React.createElement('input', { type: 'number', value: cfg.audit.maxEntries, onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, maxEntries: Number(e.target.value) || 0 } }), style: { ...S.input, width: 80 } })),
+      React.createElement('label', { style: S.label },
         ' 日志文件 ',
-        React.createElement('input', { value: cfg.audit.logFile ?? '', onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, logFile: e.target.value } }), style: { width: '70%' } })),
+        React.createElement('input', { value: cfg.audit.logFile ?? '', onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, logFile: e.target.value } }), style: { ...S.input, width: '70%' } })),
     ),
-    React.createElement('div', { style: { fontWeight: 600, margin: '6px 0 4px' } }, '规则（内置规则可直接切换动作/启停，作为覆盖保存）'),
+    React.createElement('div', { style: S.sub }, '规则（内置规则可直接切换动作/启停，作为覆盖保存）'),
     React.createElement('div', null, rows),
-    React.createElement('div', { style: { margin: '10px 0', padding: 8, border: '1px solid #333', borderRadius: 6 } },
-      React.createElement('div', { style: { fontWeight: 600, marginBottom: 4 } }, '测试匹配'),
+    React.createElement('div', { style: S.card },
+      React.createElement('div', { style: S.sub }, '测试匹配'),
       React.createElement('input', {
         placeholder: '工具名，如 bash',
         value: tool,
         onChange: (e) => setTool(e.target.value),
-        style: { width: '100%' },
+        style: { ...S.input, width: '100%', margin: '2px 0' },
       }),
       React.createElement('textarea', {
         placeholder: '参数 JSON，如 {"command":"rm -rf /"}',
         value: args,
         onChange: (e) => setArgs(e.target.value),
-        style: { width: '100%', height: 64 },
+        style: { ...S.input, width: '100%', height: 64, margin: '2px 0' },
       }),
       React.createElement('button', { onClick: () => void runTest() }, '试跑'),
-      React.createElement('div', { style: { whiteSpace: 'pre-wrap', marginTop: 4 } }, result),
+      React.createElement('div', { style: S.result }, result),
     ),
-    React.createElement('div', { style: { fontWeight: 600, margin: '8px 0 4px' } }, '审计（最近 30 条）'),
+    React.createElement('div', { style: S.sub }, '审计（最近 30 条）'),
     React.createElement('div', null, audits),
   )
 }
