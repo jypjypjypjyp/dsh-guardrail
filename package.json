@@ -1,0 +1,54 @@
+{
+  "name": "dsh-guardrail",
+  "version": "0.0.1",
+  "description": "工具调用规范守卫：对 agent 工具调用参数做字符串匹配，命中危险行为拦截并注入原因（deny），或放行但注入警告（warn），附规则管理面板",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "README.md"
+  ],
+  "license": "BSD-3-Clause",
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-host-webserver": ">=0.0.1-rc <2",
+    "@deepseek-ai/dsh-llm": ">=0.0.1-rc <2",
+    "@deepseek-ai/dsh-session": ">=0.0.1-rc <2",
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
+    "cordis": ">=4.0.0-rc <5",
+    "schemastery": "^3.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "build:client": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}
