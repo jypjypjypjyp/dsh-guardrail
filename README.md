@@ -86,12 +86,16 @@ bash scripts/build.sh        # 链接 DSH 安装依赖 + tsc(host) + tsdown(clie
 
 内置规则 `builtin: true`：不可删除、不可改 pattern，可经 `builtins.overrides` 启停/覆盖动作。
 
-### 用 lookbehind 约束「必须走 uv」
+### 用命令锚定约束「必须走 uv」
 
 例：pip 必须用 `uv pip`、python 必须走 `uv run`：
 
-- deny `(?<!uv[\s-])\bpip3?\b` —— 禁止直接 `pip` 安装
-- warn `(?<!uv\s+run\s+)\bpython3?\b` —— 直接 `python` 走 warn
+- deny `(?:^|[;&|]\s*|"command":")(?:[^\s"]*/)?pip3?\b` —— 禁止直接 `pip` 执行
+- deny `(?:^|[;&|]\s*|"command":")(?:[^\s"]*/)?python3?\b` —— 禁止直接 `python` 执行
+
+pattern 锚定**命令起点**：字符串开头（或 JSON 参数 `"command":"` 前缀）、`;`/`&&`/`|` 之后，且允许路径前缀（如 `/usr/bin/python`）。这样只拦「真正执行的命令」，不会误伤 `echo python`、`grep -rn python src/`、`cd python` 这类只是**提到**这个词的命令。
+
+> ⚠️ 语义说明：`(?<!uv[\s-])\bpip3?\b` 这类裸 `\b` 词边界版本，会命中**任意出现**的 `pip`/`python`（含 `echo python`、`grep pip`），误报严重；且它只豁免紧跟 `uv` 的 `uv pip`，**不会**豁免 `uv run pip`（`run ` 隔在中间）。如果你确实想拦截上述误报空窗，请用上面的命令锚定版。
 
 ## 配置（profile cordis.patch.yml）
 

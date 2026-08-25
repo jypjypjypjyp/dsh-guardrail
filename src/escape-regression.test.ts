@@ -93,3 +93,38 @@ describe('detectLikelyDoubleEscaped', () => {
     expect(detectLikelyDoubleEscaped('rm\\s+-rf\\s+/')).toBe(false)
   })
 })
+
+// 命令锚定版：只拦「真正执行的 pip/python 命令」，不误伤只提到这个词的命令。
+// 这是 uv 两条规则从裸 \b 词边界版收紧后的目标语义（见 README）。
+const anchoredPython = (compileRules([{
+  id: 'uv-python', tools: ['bash'],
+  pattern: '(?:^|[;&|]\\s*|"command":")(?:[^\\s"]*/)?python3?\\b',
+  action: 'deny', reason: 'rp', enabled: true,
+}])).compiled
+const anchoredPip = (compileRules([{
+  id: 'uv-pip-only', tools: ['bash'],
+  pattern: '(?:^|[;&|]\\s*|"command":")(?:[^\\s"]*/)?pip3?\\b',
+  action: 'deny', reason: 'rp', enabled: true,
+}])).compiled
+
+describe('命令锚定版 uv 规则（收紧后语义）', () => {
+  it('uv-python：真正执行的 python 命令被拦，仅提到词的命令放行', () => {
+    // deny：命令起点（JSON "command":" 前缀 / 分隔符后 / 开头的绝对路径）
+    expect(evaluate({ name: 'bash', arguments: { command: 'python -c "x"' } }, anchoredPython)?.rule.id).toBe('uv-python')
+    expect(evaluate({ name: 'bash', arguments: { command: 'python3 -m venv .venv' } }, anchoredPython)?.rule.id).toBe('uv-python')
+    expect(evaluate({ name: 'bash', arguments: { command: '/usr/bin/python -c x' } }, anchoredPython)?.rule.id).toBe('uv-python')
+    // pass：uv 前缀、纯文本提到、cd/grep/echo、变量赋值
+    expect(evaluate({ name: 'bash', arguments: { command: 'uv run python -c "x"' } }, anchoredPython)).toBeUndefined()
+    expect(evaluate({ name: 'bash', arguments: { command: 'echo python' } }, anchoredPython)).toBeUndefined()
+    expect(evaluate({ name: 'bash', arguments: { command: 'grep -rn python src/' } }, anchoredPython)).toBeUndefined()
+    expect(evaluate({ name: 'bash', arguments: { command: 'cd python && ls' } }, anchoredPython)).toBeUndefined()
+    expect(evaluate({ name: 'bash', arguments: { command: 'echo "python"' } }, anchoredPython)).toBeUndefined()
+    expect(evaluate({ name: 'bash', arguments: { command: 'v="python"; echo $v' } }, anchoredPython)).toBeUndefined()
+  })
+  it('uv-pip-only：真正执行的 pip 命令被拦，仅提到词的命令放行', () => {
+    expect(evaluate({ name: 'bash', arguments: { command: 'pip install requests' } }, anchoredPip)?.rule.id).toBe('uv-pip-only')
+    expect(evaluate({ name: 'bash', arguments: { command: 'uv pip install requests' } }, anchoredPip)).toBeUndefined()
+    expect(evaluate({ name: 'bash', arguments: { command: 'echo pip' } }, anchoredPip)).toBeUndefined()
+    expect(evaluate({ name: 'bash', arguments: { command: 'pip' } }, anchoredPip)?.rule.id).toBe('uv-pip-only')
+  })
+})
