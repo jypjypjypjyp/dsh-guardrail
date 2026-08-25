@@ -189,6 +189,15 @@ function GuardrailPanel(): React.ReactElement {
     }
   }
 
+  const setRuleAction = async (id: string, action: 'deny' | 'warn'): Promise<void> => {
+    try {
+      await apiSend('PUT', `/rules/${encodeURIComponent(id)}`, { action })
+      await refresh()
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
   const rows: React.ReactElement[] = rules.map((r) =>
     React.createElement('div', { style: { ...S.row, ...(r.enabled ? {} : S.rowDisabled) }, key: r.id },
       React.createElement('span', { style: { fontWeight: 600, ...(r.enabled ? {} : { textDecoration: 'line-through' }) } }, `${r.builtin ? '📦' : '📝'} ${r.id}`),
@@ -199,16 +208,17 @@ function GuardrailPanel(): React.ReactElement {
         style: { marginLeft: 'auto' },
         onClick: () => void (r.builtin ? overrideBuiltin(r.id, { enabled: !r.enabled }) : toggleRule(r.id, r.enabled)),
       }, r.enabled ? '停用' : '启用'),
-      r.builtin
-        ? React.createElement('select', {
-            value: r.action,
-            onChange: (e) => void overrideBuiltin(r.id, { action: e.target.value as 'deny' | 'warn' }),
-            style: { fontSize: 11, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', border: '1px solid var(--dsw-alias-border-l2)' },
-          },
-          React.createElement('option', { value: 'deny' }, 'deny'),
-          React.createElement('option', { value: 'warn' }, 'warn'),
-        )
-        : React.createElement('button', { onClick: () => void removeRule(r.id) }, '删除'),
+      React.createElement('select', {
+        value: r.action,
+        onChange: (e) => void (r.builtin ? overrideBuiltin(r.id, { action: e.target.value as 'deny' | 'warn' }) : setRuleAction(r.id, e.target.value as 'deny' | 'warn')),
+        style: { fontSize: 11, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', border: '1px solid var(--dsw-alias-border-l2)' },
+      },
+        React.createElement('option', { value: 'deny' }, 'deny'),
+        React.createElement('option', { value: 'warn' }, 'warn'),
+      ),
+      !r.builtin
+        ? React.createElement('button', { onClick: () => void removeRule(r.id) }, '删除')
+        : null,
     ),
   )
 
