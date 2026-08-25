@@ -107,6 +107,8 @@ const STYLE = `
   border-radius: 6px;
   padding: 2px 6px;
   font-size: 12px;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 #guardrail-panel select:focus,
 #guardrail-panel input:focus,
@@ -133,12 +135,15 @@ const S = {
   audit: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--dsw-alias-label-tertiary)', fontSize: 11 },
 } satisfies Record<string, React.CSSProperties>
 
-// 原生组件做法：state 类徽章用「低饱和底 + 强调色文字」（见 dsh-client-ui-trajectory 的
-// tertiary/color-mix 组合），避免实心底与文字撞色，且亮暗主题自适应。
+// 原生组件做法：state 徽章用「状态色 × 面板底的 color-mix 低饱和底 + 状态色文字」，
+// 见 dsh-client-ui-trajectory 的 success pill（background: color-mix(...)）。这样在亮/暗主题下
+// 都能保证「状态色文字」与加深/减淡底之间的对比，避免实心底文字撞色。
 const badge = (kind: 'deny' | 'warn'): React.CSSProperties => ({
   display: 'inline-flex', alignItems: 'center', padding: '0 8px', height: 18, borderRadius: 999,
   fontSize: 11, fontWeight: 600, flexShrink: 0,
-  background: kind === 'deny' ? 'var(--dsw-alias-state-error-secondary)' : 'var(--dsw-alias-state-warn-tertiary)',
+  background: kind === 'deny'
+    ? 'color-mix(in srgb, var(--dsw-alias-state-error-primary) 24%, var(--dsw-alias-bg-layer-1))'
+    : 'color-mix(in srgb, var(--dsw-alias-state-warn-primary) 24%, var(--dsw-alias-bg-layer-1))',
   color: kind === 'deny' ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-state-warn-primary)',
 })
 
