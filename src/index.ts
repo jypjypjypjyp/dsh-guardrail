@@ -65,17 +65,20 @@ export const Config: z<Config> = z.object({
   }),
 })
 
+/** 内置规则列表，应用 config.builtins.overrides（反映 enabled/action 覆盖）。 */
+function builtinRules(config: Config): Rule[] {
+  if (!config.builtins.enabled) return []
+  const overrideById = new Map(config.builtins.overrides.map((o) => [o.id, o]))
+  return BUILTIN_RULES.map((r) => {
+    const o = overrideById.get(r.id)
+    return o ? { ...r, ...o, id: r.id, builtin: true } : r
+  })
+}
+
 /** 当前生效规则：内置（应用 overrides）+ 用户规则，按序（内置在前）。 */
 function effectiveRules(config: Config, store: RuleStore): CompiledRule[] {
   if (!config.enabled) return []
-  const overrideById = new Map(config.builtins.overrides.map((r) => [r.id, r]))
-  const builtins = config.builtins.enabled
-    ? BUILTIN_RULES.map((r) => {
-        const o = overrideById.get(r.id)
-        return o ? { ...r, ...o, id: r.id, builtin: true } : r
-      })
-    : []
-  return compileRules([...builtins, ...store.list()]).compiled
+  return compileRules([...builtinRules(config), ...store.list()]).compiled
 }
 
 /** 用户可在 UI 改写的插件配置：持久化到 `~/.dsh/guardrail-config.json`。 */
@@ -223,7 +226,7 @@ export function apply(ctx: Context, config?: Config): void {
   const apiDeps: ApiDeps = {
     ...deps,
     store,
-    builtins: () => (resolve().builtins.enabled ? BUILTIN_RULES : []),
+    builtins: () => builtinRules(resolve()),
     config: {
       get: () => ({ ...current }),
       put: (cfg) => {
