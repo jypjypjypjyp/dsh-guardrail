@@ -61,6 +61,7 @@ const S = {
   sub: { fontWeight: 600, margin: '6px 0 4px', color: 'var(--dsw-alias-label-primary)' },
   card: { margin: '6px 0', padding: 8, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-module-platform)' },
   row: { display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', borderBottom: '1px solid var(--dsw-alias-border-l2)' },
+  rowDisabled: { textDecoration: 'line-through', opacity: 0.5, color: 'var(--dsw-alias-label-tertiary)' },
   muted: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11 },
   error: { color: 'var(--dsw-alias-state-error-primary)', marginBottom: 6 },
   label: { display: 'block', margin: '2px 0', color: 'var(--dsw-alias-label-secondary)' },
@@ -162,8 +163,8 @@ function GuardrailPanel(): React.ReactElement {
   }
 
   const rows: React.ReactElement[] = rules.map((r) =>
-    React.createElement('div', { style: S.row, key: r.id },
-      React.createElement('span', { style: { fontWeight: 600 } }, `${r.builtin ? '📦' : '📝'} ${r.id}`),
+    React.createElement('div', { style: { ...S.row, ...(r.enabled ? {} : S.rowDisabled) }, key: r.id },
+      React.createElement('span', { style: { fontWeight: 600, ...(r.enabled ? {} : { textDecoration: 'line-through' }) } }, `${r.builtin ? '📦' : '📝'} ${r.id}`),
       React.createElement('span', { style: badge(r.action) }, r.action),
       React.createElement('span', { style: S.muted },
         `${(r.tools?.length ? r.tools.join(',') : '*')}  ${r.pattern.slice(0, 32)}`),
