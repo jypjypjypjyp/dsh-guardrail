@@ -100,6 +100,12 @@ function GuardrailPanel(): React.ReactElement {
   const [args, setArgs] = React.useState('')
   const [result, setResult] = React.useState('')
   const [cfg, setCfg] = React.useState<GuardrailConfig>(DEFAULT_CFG)
+  const [newId, setNewId] = React.useState('')
+  const [newPattern, setNewPattern] = React.useState('')
+  const [newAction, setNewAction] = React.useState<'deny' | 'warn'>('deny')
+  const [newReason, setNewReason] = React.useState('')
+  const [newTools, setNewTools] = React.useState('')
+  const [newField, setNewField] = React.useState('')
 
   const refresh = React.useCallback(async () => {
     try {
@@ -162,6 +168,27 @@ function GuardrailPanel(): React.ReactElement {
     }
   }
 
+  const addRule = async (): Promise<void> => {
+    const id = newId.trim()
+    const pattern = newPattern.trim()
+    if (!id || !pattern) { setError('添加规则须填 id 与 pattern'); return }
+    const rule: Rule = {
+      id, pattern, action: newAction,
+      reason: newReason.trim() || `命中规则 ${id}`,
+      enabled: true,
+    }
+    const tools = newTools.trim() ? newTools.split(',').map((s) => s.trim()).filter(Boolean) : undefined
+    if (tools && tools.length) rule.tools = tools
+    if (newField.trim()) rule.field = newField.trim()
+    try {
+      await apiSend('POST', '/rules', rule)
+      setNewId(''); setNewPattern(''); setNewReason(''); setNewTools(''); setNewField(''); setError('')
+      await refresh()
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
   const rows: React.ReactElement[] = rules.map((r) =>
     React.createElement('div', { style: { ...S.row, ...(r.enabled ? {} : S.rowDisabled) }, key: r.id },
       React.createElement('span', { style: { fontWeight: 600, ...(r.enabled ? {} : { textDecoration: 'line-through' }) } }, `${r.builtin ? '📦' : '📝'} ${r.id}`),
@@ -214,7 +241,7 @@ function GuardrailPanel(): React.ReactElement {
     React.createElement('div', { style: S.sub }, '规则（内置规则可直接切换动作/启停，作为覆盖保存）'),
     React.createElement('div', null, rows),
     React.createElement('div', { style: S.card },
-      React.createElement('div', { style: S.sub }, '测试匹配'),
+      React.createElement('div', { style: S.sub }, '测试 / 添加规则'),
       React.createElement('input', {
         placeholder: '工具名，如 bash',
         value: tool,
@@ -225,10 +252,22 @@ function GuardrailPanel(): React.ReactElement {
         placeholder: '参数 JSON，如 {"command":"rm -rf /"}',
         value: args,
         onChange: (e) => setArgs(e.target.value),
-        style: { ...S.input, width: '100%', height: 64, margin: '2px 0' },
+        style: { ...S.input, width: '100%', height: 48, margin: '2px 0' },
       }),
       React.createElement('button', { onClick: () => void runTest() }, '试跑'),
       React.createElement('div', { style: S.result }, result),
+      React.createElement('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 8 } },
+        React.createElement('div', { style: S.sub }, '添加规则'),
+        React.createElement('input', { placeholder: 'id（必填）', value: newId, onChange: (e) => setNewId(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
+        React.createElement('input', { placeholder: '正则 pattern（必填）', value: newPattern, onChange: (e) => setNewPattern(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
+        React.createElement('select', { value: newAction, onChange: (e) => setNewAction(e.target.value as 'deny' | 'warn'), style: { ...S.input, margin: '2px 0' } },
+          React.createElement('option', { value: 'deny' }, 'deny'),
+          React.createElement('option', { value: 'warn' }, 'warn')),
+        React.createElement('input', { placeholder: 'reason（支持 {tool}/{pattern}）', value: newReason, onChange: (e) => setNewReason(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
+        React.createElement('input', { placeholder: 'tools，逗号分隔（空=全部）', value: newTools, onChange: (e) => setNewTools(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
+        React.createElement('input', { placeholder: 'field（可选，如 command）', value: newField, onChange: (e) => setNewField(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
+        React.createElement('button', { onClick: () => void addRule() }, '添加规则'),
+      ),
     ),
     React.createElement('div', { style: S.sub }, '审计（最近 30 条）'),
     React.createElement('div', null, audits),
