@@ -32,6 +32,16 @@ export interface RuleHit {
 
 export type MatchInput = { name: string; arguments: unknown }
 
+/**
+ * 检测疑似「双重转义」的正则：字面 `\\x`（两个反斜杠后跟常见转义字母）。
+ * 这类 pattern 是合法的 RegExp，但语义是「匹配字面反斜杠+字母」，几乎总是用户多包了一层转义
+ * （如把 `[\s-]` 写成了 `[\\s-]`），导致 compile+evaluate 静默永不命中。仅作告警，不阻断。
+ */
+export function detectLikelyDoubleEscaped(pattern: string): boolean {
+  // `\\\\` = 两个字面反斜杠，后跟字母/数字（常见正则转义符）。warning-only，宁可略宽。
+  return /\\\\[a-zA-Z0-9]/.test(pattern)
+}
+
 export function compileRule(rule: Rule): { ok: true; rule: CompiledRule } | { ok: false; error: string } {
   try {
     return { ok: true, rule: { ...rule, regex: new RegExp(rule.pattern) } }

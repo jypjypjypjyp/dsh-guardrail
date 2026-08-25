@@ -21,7 +21,7 @@ import {
   createPostExecuteHandler, createPreExecuteHandler, WarnTracker,
   type GuardrailDeps,
 } from './handlers.js'
-import { compileRules, evaluate, type CompiledRule, type Rule } from './rules.js'
+import { compileRules, detectLikelyDoubleEscaped, evaluate, type CompiledRule, type Rule } from './rules.js'
 import { RuleStore } from './store.js'
 
 export const name = 'guardrail'
@@ -162,7 +162,10 @@ export function createApiHandler(deps: ApiDeps) {
         const parsed = JSON.parse(await readBody(req)) as Rule
         if (!parsed.id || !parsed.pattern || !parsed.action) { json(res, 400, { error: 'id/pattern/action required' }); return }
         deps.store.upsert(parsed)
-        json(res, 200, { ok: true })
+        const warning = detectLikelyDoubleEscaped(parsed.pattern)
+          ? `pattern 疑似双重转义（将永不命中）：${parsed.pattern}`
+          : undefined
+        json(res, 200, { ok: true, warning })
         return
       }
       if (req.method === 'PUT' && segments.length === 2 && segments[0] === 'rules') {
@@ -215,6 +218,9 @@ export function apply(ctx: Context, config?: Config): void {
   const loadResult = store.load()
   if (loadResult.failures.length > 0) {
     ctx.logger?.warn?.(`guardrail: rules load issues: ${loadResult.failures.join('; ')}`)
+  }
+  if (loadResult.warnings.length > 0) {
+    ctx.logger?.warn?.(`guardrail: ${loadResult.warnings.join('; ')}`)
   }
 
   const audit = new Audit(resolve().audit.maxEntries, resolve().audit.logFile)

@@ -2,6 +2,7 @@ import {
   copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync,
 } from 'node:fs'
 import { dirname } from 'node:path'
+import { detectLikelyDoubleEscaped } from './rules.js'
 import type { Rule } from './rules.js'
 
 export interface RuleStoreLogger {
@@ -20,16 +21,20 @@ export class RuleStore {
     private readonly logger?: RuleStoreLogger,
   ) {}
 
-  load(): { rules: Rule[]; failures: string[] } {
+  load(): { rules: Rule[]; failures: string[]; warnings: string[] } {
     if (!existsSync(this.filePath)) {
       this.rules = []
-      return { rules: [], failures: [`rule file not found: ${this.filePath}`] }
+      return { rules: [], failures: [`rule file not found: ${this.filePath}`], warnings: [] }
     }
     try {
       const parsed: unknown = JSON.parse(readFileSync(this.filePath, 'utf8'))
       if (!Array.isArray(parsed)) throw new Error('rule file must be a JSON array')
       this.rules = parsed as Rule[]
-      return { rules: this.rules, failures: [] }
+      // 迁移告警：检出疑似双重转义的 pattern（合法但语义不对，compile+evaluate 会静默失效）。
+      const warnings = this.rules
+        .filter((r) => detectLikelyDoubleEscaped(r.pattern))
+        .map((r) => `rule ${r.id} pattern 疑似双重转义，将永不命中：${r.pattern}`)
+      return { rules: this.rules, failures: [], warnings }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       try {
@@ -39,7 +44,7 @@ export class RuleStore {
       }
       this.rules = []
       this.logger?.warn?.(`guardrail: rule file broken (${message}); backed up and reset to empty`)
-      return { rules: [], failures: [`${message}`] }
+      return { rules: [], failures: [`${message}`], warnings: [] }
     }
   }
 
