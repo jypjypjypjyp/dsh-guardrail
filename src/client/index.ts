@@ -5,6 +5,9 @@
  * 追加式）——在会话视图环里提供 "guardrail" 标签页，渲染规则管理 UI。
  * 不 import 真实 slot 包（宿主在运行时经 module loader 提供 slots 服务与 react），
  * 因此这里用 `ctx.slots` 与 React 外部依赖，构建走 tsdown（browser bundle）。
+ *
+ * 样式约定：全部视觉只使用 DSH 系统主题 token（`--dsw-alias-*` / `--ds-*`），
+ * 不引入自定义硬编码颜色/字体，随主题（亮/暗）自动切换，与整站统一。
  */
 import React from 'react'
 
@@ -54,26 +57,89 @@ const DEFAULT_CFG: GuardrailConfig = {
   audit: { maxEntries: 200 },
 }
 
+// 主题相关 CSS：全部取值来自 DSH 系统 token，任何 hover/焦点态随亮暗主题切换。
+// 作用域以 #guardrail-panel 前缀限定，避免污染宿主样式。
+const STYLE = `
+#guardrail-panel {
+  font-size: 12px;
+  color: var(--dsw-alias-label-primary);
+}
+#guardrail-panel button,
+#guardrail-panel input,
+#guardrail-panel select,
+#guardrail-panel textarea {
+  font-family: inherit;
+}
+#guardrail-panel button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+  color: var(--dsw-alias-label-primary);
+}
+#guardrail-panel button:disabled { opacity: .5; cursor: default; }
+#guardrail-panel button.gr-primary {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+#guardrail-panel button.gr-primary:hover:not(:disabled) { background: var(--dsw-alias-button-primary-hover); }
+#guardrail-panel button.gr-ghost {
+  background: var(--dsw-alias-bg-layer-1);
+  border-color: var(--dsw-alias-border-l2);
+}
+#guardrail-panel button.gr-ghost:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+#guardrail-panel button.gr-danger { color: var(--dsw-alias-state-error-primary); }
+#guardrail-panel button.gr-danger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-danger); }
+#guardrail-panel select,
+#guardrail-panel input,
+#guardrail-panel textarea {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+#guardrail-panel select:focus,
+#guardrail-panel input:focus,
+#guardrail-panel textarea:focus {
+  border-color: var(--dsw-alias-border-l3);
+  outline: none;
+}
+#guardrail-panel .gr-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+`
+
 // 复用 DSH 主题 CSS 变量，与整站视觉保持一致（颜色/边框/圆角/字体均取自主题 token）。
 const S = {
-  root: { fontFamily: 'var(--ds-font-family-code)', fontSize: 12, color: 'var(--dsw-alias-label-primary)', padding: 12 },
+  root: { padding: 12 },
   heading: { fontWeight: 700, marginBottom: 8 },
-  sub: { fontWeight: 600, margin: '6px 0 4px', color: 'var(--dsw-alias-label-primary)' },
-  card: { margin: '6px 0', padding: 8, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-module-platform)' },
-  row: { display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', borderBottom: '1px solid var(--dsw-alias-border-l2)' },
+  sub: { fontWeight: 600, margin: '6px 0 4px', color: 'var(--dsw-alias-label-secondary)' },
+  card: { margin: '6px 0', padding: 10, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-module-platform)' },
+  row: { display: 'flex', alignItems: 'center', gap: 8, padding: '3px 6px', borderRadius: 6 },
   rowDisabled: { textDecoration: 'line-through', opacity: 0.5, color: 'var(--dsw-alias-label-tertiary)' },
   muted: { color: 'var(--dsw-alias-label-secondary)', fontSize: 11 },
+  code: { fontFamily: 'var(--ds-font-family-code)' },
   error: { color: 'var(--dsw-alias-state-error-primary)', marginBottom: 6 },
   label: { display: 'block', margin: '2px 0', color: 'var(--dsw-alias-label-secondary)' },
-  input: { background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 6, padding: '1px 6px', fontSize: 12 },
-  result: { whiteSpace: 'pre-wrap', marginTop: 4, color: 'var(--dsw-alias-label-primary)' },
+  result: { whiteSpace: 'pre-wrap', marginTop: 6, color: 'var(--dsw-alias-label-primary)' },
   audit: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--dsw-alias-label-tertiary)', fontSize: 11 },
 } satisfies Record<string, React.CSSProperties>
 
+// 原生组件做法：state 类徽章用「低饱和底 + 强调色文字」（见 dsh-client-ui-trajectory 的
+// tertiary/color-mix 组合），避免实心底与文字撞色，且亮暗主题自适应。
 const badge = (kind: 'deny' | 'warn'): React.CSSProperties => ({
-  display: 'inline-block', padding: '0 6px', borderRadius: 8, fontSize: 11,
-  background: kind === 'deny' ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-state-warn-label)',
-  marginLeft: 6, color: 'var(--dsw-alias-label-primary)',
+  display: 'inline-flex', alignItems: 'center', padding: '0 8px', height: 18, borderRadius: 999,
+  fontSize: 11, fontWeight: 600, flexShrink: 0,
+  background: kind === 'deny' ? 'var(--dsw-alias-state-error-secondary)' : 'var(--dsw-alias-state-warn-tertiary)',
+  color: kind === 'deny' ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-state-warn-primary)',
 })
 
 async function apiGet<T>(path: string): Promise<T> {
@@ -199,25 +265,25 @@ function GuardrailPanel(): React.ReactElement {
   }
 
   const rows: React.ReactElement[] = rules.map((r) =>
-    React.createElement('div', { style: { ...S.row, ...(r.enabled ? {} : S.rowDisabled) }, key: r.id },
+    React.createElement('div', { style: { ...S.row, ...(r.enabled ? {} : S.rowDisabled) }, className: 'gr-row', key: r.id },
       React.createElement('span', { style: { fontWeight: 600, ...(r.enabled ? {} : { textDecoration: 'line-through' }) } }, `${r.builtin ? '📦' : '📝'} ${r.id}`),
       React.createElement('span', { style: badge(r.action) }, r.action),
-      React.createElement('span', { style: S.muted },
+      React.createElement('span', { style: { ...S.muted, ...S.code } },
         `${(r.tools?.length ? r.tools.join(',') : '*')}  ${r.pattern.slice(0, 32)}`),
       React.createElement('button', {
+        className: 'gr-ghost',
         style: { marginLeft: 'auto' },
         onClick: () => void (r.builtin ? overrideBuiltin(r.id, { enabled: !r.enabled }) : toggleRule(r.id, r.enabled)),
       }, r.enabled ? '停用' : '启用'),
       React.createElement('select', {
         value: r.action,
         onChange: (e) => void (r.builtin ? overrideBuiltin(r.id, { action: e.target.value as 'deny' | 'warn' }) : setRuleAction(r.id, e.target.value as 'deny' | 'warn')),
-        style: { fontSize: 11, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', border: '1px solid var(--dsw-alias-border-l2)' },
       },
         React.createElement('option', { value: 'deny' }, 'deny'),
         React.createElement('option', { value: 'warn' }, 'warn'),
       ),
       !r.builtin
-        ? React.createElement('button', { onClick: () => void removeRule(r.id) }, '删除')
+        ? React.createElement('button', { className: 'gr-ghost gr-danger', onClick: () => void removeRule(r.id) }, '删除')
         : null,
     ),
   )
@@ -227,7 +293,8 @@ function GuardrailPanel(): React.ReactElement {
       `[${new Date(e.ts).toLocaleTimeString()}] ${e.action} ${e.tool} → ${e.ruleId} ${e.reason}`),
   )
 
-  return React.createElement('div', { style: S.root },
+  return React.createElement('div', { style: S.root, id: 'guardrail-panel' },
+    React.createElement('style', { dangerouslySetInnerHTML: { __html: STYLE } }),
     React.createElement('div', { style: S.heading }, '🛡️ guardrail 工具调用守卫'),
     error ? React.createElement('div', { style: S.error }, error) : null,
     React.createElement('div', { style: S.card },
@@ -237,16 +304,16 @@ function GuardrailPanel(): React.ReactElement {
         '  启用守卫'),
       React.createElement('label', { style: S.label },
         '规则文件 ',
-        React.createElement('input', { value: cfg.rulesFile, readOnly: true, style: { ...S.input, width: '70%' } })),
+        React.createElement('input', { value: cfg.rulesFile, readOnly: true, style: { width: '70%' } })),
       React.createElement('label', { style: S.label },
         React.createElement('input', { type: 'checkbox', checked: cfg.builtins.enabled, onChange: (e) => void saveConfig({ ...cfg, builtins: { ...cfg.builtins, enabled: e.target.checked } }) }),
         '  启用内置规则'),
       React.createElement('label', { style: S.label },
         ' 审计上限 ',
-        React.createElement('input', { type: 'number', value: cfg.audit.maxEntries, onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, maxEntries: Number(e.target.value) || 0 } }), style: { ...S.input, width: 80 } })),
+        React.createElement('input', { type: 'number', value: cfg.audit.maxEntries, onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, maxEntries: Number(e.target.value) || 0 } }), style: { width: 80 } })),
       React.createElement('label', { style: S.label },
         ' 日志文件 ',
-        React.createElement('input', { value: cfg.audit.logFile ?? '', onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, logFile: e.target.value } }), style: { ...S.input, width: '70%' } })),
+        React.createElement('input', { value: cfg.audit.logFile ?? '', onChange: (e) => void saveConfig({ ...cfg, audit: { ...cfg.audit, logFile: e.target.value } }), style: { width: '70%' } })),
     ),
     React.createElement('div', { style: S.sub }, '规则（内置规则可直接切换动作/启停，作为覆盖保存）'),
     React.createElement('div', null, rows),
@@ -256,27 +323,27 @@ function GuardrailPanel(): React.ReactElement {
         placeholder: '工具名，如 bash',
         value: tool,
         onChange: (e) => setTool(e.target.value),
-        style: { ...S.input, width: '100%', margin: '2px 0' },
+        style: { width: '100%', margin: '2px 0' },
       }),
       React.createElement('textarea', {
         placeholder: '参数 JSON，如 {"command":"rm -rf /"}',
         value: args,
         onChange: (e) => setArgs(e.target.value),
-        style: { ...S.input, width: '100%', height: 48, margin: '2px 0' },
+        style: { width: '100%', height: 48, margin: '2px 0' },
       }),
-      React.createElement('button', { onClick: () => void runTest() }, '试跑'),
+      React.createElement('button', { className: 'gr-primary', onClick: () => void runTest() }, '试跑'),
       React.createElement('div', { style: S.result }, result),
       React.createElement('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsw-alias-border-l2)', paddingTop: 8 } },
         React.createElement('div', { style: S.sub }, '添加规则'),
-        React.createElement('input', { placeholder: 'id（必填）', value: newId, onChange: (e) => setNewId(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
-        React.createElement('input', { placeholder: '正则 pattern（必填）', value: newPattern, onChange: (e) => setNewPattern(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
-        React.createElement('select', { value: newAction, onChange: (e) => setNewAction(e.target.value as 'deny' | 'warn'), style: { ...S.input, margin: '2px 0' } },
+        React.createElement('input', { placeholder: 'id（必填）', value: newId, onChange: (e) => setNewId(e.target.value), style: { width: '100%', margin: '2px 0' } }),
+        React.createElement('input', { placeholder: '正则 pattern（必填）', value: newPattern, onChange: (e) => setNewPattern(e.target.value), style: { width: '100%', margin: '2px 0' } }),
+        React.createElement('select', { value: newAction, onChange: (e) => setNewAction(e.target.value as 'deny' | 'warn'), style: { width: '100%', margin: '2px 0' } },
           React.createElement('option', { value: 'deny' }, 'deny'),
           React.createElement('option', { value: 'warn' }, 'warn')),
-        React.createElement('input', { placeholder: 'reason（支持 {tool}/{pattern}）', value: newReason, onChange: (e) => setNewReason(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
-        React.createElement('input', { placeholder: 'tools，逗号分隔（空=全部）', value: newTools, onChange: (e) => setNewTools(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
-        React.createElement('input', { placeholder: 'field（可选，如 command）', value: newField, onChange: (e) => setNewField(e.target.value), style: { ...S.input, width: '100%', margin: '2px 0' } }),
-        React.createElement('button', { onClick: () => void addRule() }, '添加规则'),
+        React.createElement('input', { placeholder: 'reason（支持 {tool}/{pattern}）', value: newReason, onChange: (e) => setNewReason(e.target.value), style: { width: '100%', margin: '2px 0' } }),
+        React.createElement('input', { placeholder: 'tools，逗号分隔（空=全部）', value: newTools, onChange: (e) => setNewTools(e.target.value), style: { width: '100%', margin: '2px 0' } }),
+        React.createElement('input', { placeholder: 'field（可选，如 command）', value: newField, onChange: (e) => setNewField(e.target.value), style: { width: '100%', margin: '2px 0' } }),
+        React.createElement('button', { className: 'gr-primary', onClick: () => void addRule() }, '添加规则'),
       ),
     ),
     React.createElement('div', { style: S.sub }, '审计（最近 30 条）'),
