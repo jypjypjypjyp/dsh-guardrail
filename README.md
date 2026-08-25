@@ -2,8 +2,6 @@
 
 工具调用规范守卫：对 agent 工具调用**输入参数**做字符串匹配，命中危险行为则**拦截（deny）并注入原因**给模型，或**放行但注入警告（warn）**。附规则管理面板（配置/启停/增删/试跑/审计全部可在 UI 完成）。
 
-![插件介绍](docs/images/panel-intro.png)
-
 ## 能力
 
 - 挂 `tools/pre-execute`（waterfall）：deny → 工具不执行 + 原因注入模型可见错误；warn → 放行 + `tools/post-execute` 注入独立警告消息

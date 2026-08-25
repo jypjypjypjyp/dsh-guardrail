@@ -2,3 +2,4 @@ node_modules/
 lib/
 pnpm-lock.yaml
 pnpm-workspace.yaml
+.DS_Store
