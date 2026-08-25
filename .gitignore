@@ -3,3 +3,4 @@ lib/
 pnpm-lock.yaml
 pnpm-workspace.yaml
 .DS_Store
+*.tgz

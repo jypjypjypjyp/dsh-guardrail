@@ -4,6 +4,21 @@
   "description": "工具调用规范守卫：对 agent 工具调用参数做字符串匹配，命中危险行为拦截并注入原因（deny），或放行但注入警告（warn），附规则管理面板",
   "private": true,
   "type": "module",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "guardrail",
+    "security",
+    "tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jypjypjypjyp/dsh-guardrail.git"
+  },
+  "homepage": "https://github.com/jypjypjypjyp/dsh-guardrail#readme",
+  "bugs": {
+    "url": "https://github.com/jypjypjypjyp/dsh-guardrail/issues"
+  },
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",
   "exports": {
@@ -36,12 +51,12 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0-rc <5",
-    "@deepseek-ai/dsh-host-webserver": ">=0.0.1-rc <2",
-    "@deepseek-ai/dsh-llm": ">=0.0.1-rc <2",
+    "@deepseek-ai/dsh-host-webserver": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0",
+    "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0",
     "@deepseek-ai/schemastery": "^3.18.0",
-    "@deepseek-ai/dsh-session": ">=0.0.1-rc <2",
-    "@deepseek-ai/dsh-settings": ">=0.0.1-rc <2",
-    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2"
+    "@deepseek-ai/dsh-session": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0",
+    "@deepseek-ai/dsh-settings": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
