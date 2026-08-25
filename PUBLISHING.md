@@ -87,5 +87,5 @@ MIN_COMMITS  = 10     # 仓库提交数 ≥10
 - **peer 范围**：必须 `||` prerelease 分支（见 §二，用真实 `0.1.0-rc.7` 验证过）。
 - **双重转义**：用户写正则进 `~/.dsh/guardrail-rules.json` 时若多打一层反斜杠（`\\s`→字面 `\s`），compile+evaluate 会**永不命中**；补回归测试"JSON→compile→evaluate 仍命中"。
 - **UI 零硬编码颜色**：只用 DSH 主题 token（`--dsw-alias-*`/`--ds-*`），否则暗主题下红底红字不可读。
-- **发布物脱敏**：`lib/` 不入库、`.gitignore` 含 `*.tgz`、README 截图里的绝对路径（`/Users/a1234`）应改 `~`。
+- **发布物脱敏**：`lib/` 不入库、`.gitignore` 含 `*.tgz`、README 截图里的绝对路径（如 `/home/me`）应改 `~`。
 - **别热重载核心组合插件**：`dev_reload_package` 只适合 bundling 插件；对 `dsh-client-modules` 这类组合插件热重载会导致 client bundle 404。
